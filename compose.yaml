@@ -1,0 +1,12 @@
+services:
+  ct-service:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 3g
