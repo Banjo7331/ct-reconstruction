@@ -15,6 +15,7 @@
     <modules>
         <module>ct-matlab</module>
         <module>ct-engine</module>
+        <module>ct-core</module>
     </modules>
 
     <properties>
@@ -30,6 +31,21 @@
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>dev.ctrecon</groupId>
+                <artifactId>ct-matlab</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.ctrecon</groupId>
+                <artifactId>ct-engine</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.ctrecon</groupId>
+                <artifactId>ct-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
             <dependency>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
