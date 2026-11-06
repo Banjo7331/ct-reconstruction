@@ -67,6 +67,9 @@ final class MatInput {
     }
 
     int[] readIntegers(ElementTag tag) throws IOException {
+        if (tag.type() == MatDataType.INT32) {
+            return readInt32(tag);
+        }
         double[] values = readNumeric(tag);
         int[] integers = new int[values.length];
         for (int i = 0; i < values.length; i++) {
@@ -98,6 +101,23 @@ final class MatInput {
             }
         }
         skip(tag.byteCount() - (long) count * itemSize + tag.padding());
+        return values;
+    }
+
+    private int[] readInt32(ElementTag tag) throws IOException {
+        int count = tag.elementCount();
+        int[] values = new int[count];
+        byte[] buffer = new byte[Math.max(Integer.BYTES, Math.min(count * Integer.BYTES, 1 << 16))];
+        ByteBuffer view = ByteBuffer.wrap(buffer).order(order);
+        int index = 0;
+        while (index < count) {
+            int items = Math.min(count - index, buffer.length / Integer.BYTES);
+            readFully(buffer, 0, items * Integer.BYTES);
+            view.clear();
+            view.asIntBuffer().get(values, index, items);
+            index += items;
+        }
+        skip(tag.byteCount() - (long) count * Integer.BYTES + tag.padding());
         return values;
     }
 
