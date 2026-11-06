@@ -19,4 +19,8 @@ public final class MatFile {
     public Optional<MatNumericArray> numeric(String name) {
         return variables.get(name) instanceof MatNumericArray array ? Optional.of(array) : Optional.empty();
     }
+
+    public Optional<MatSparseMatrix> sparse(String name) {
+        return variables.get(name) instanceof MatSparseMatrix matrix ? Optional.of(matrix) : Optional.empty();
+    }
 }

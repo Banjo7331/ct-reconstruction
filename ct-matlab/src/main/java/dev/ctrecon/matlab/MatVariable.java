@@ -1,6 +1,6 @@
 package dev.ctrecon.matlab;
 
-public sealed interface MatVariable permits MatNumericArray {
+public sealed interface MatVariable permits MatNumericArray, MatSparseMatrix {
 
     String name();
 

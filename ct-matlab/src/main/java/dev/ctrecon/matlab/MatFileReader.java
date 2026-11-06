@@ -142,6 +142,13 @@ public final class MatFileReader {
     }
 
     private static MatVariable readData(MatInput input, MatVariableInfo info) throws IOException {
+        if (info.matClass() == MatClass.SPARSE) {
+            requireRealMatrix(info);
+            int[] rowIndices = input.readIntegers(input.readTag());
+            int[] columnPointers = input.readIntegers(input.readTag());
+            double[] values = input.readNumeric(input.readTag());
+            return new MatSparseMatrix(info.name(), info.rows(), info.columns(), rowIndices, columnPointers, values);
+        }
         if (!info.matClass().isNumeric()) {
             return null;
         }
