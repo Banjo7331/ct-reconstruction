@@ -28,6 +28,8 @@
         <spring-boot.version>4.0.7</spring-boot.version>
         <maven-compiler-plugin.version>3.14.0</maven-compiler-plugin.version>
         <maven-surefire-plugin.version>3.5.4</maven-surefire-plugin.version>
+
+        <excludedGroups>performance</excludedGroups>
     </properties>
 
     <dependencyManagement>
@@ -56,6 +58,16 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <profiles>
+        <profile>
+            <id>performance</id>
+            <properties>
+                <groups>performance</groups>
+                <excludedGroups></excludedGroups>
+            </properties>
+        </profile>
+    </profiles>
 
     <build>
         <pluginManagement>
