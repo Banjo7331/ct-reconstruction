@@ -9,6 +9,7 @@ import dev.ctrecon.engine.synthetic.SyntheticScanner;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.time.Duration;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -46,10 +47,16 @@ class ReconstructorTest {
     }
 
     private static List<String> liveEngineThreads() {
-        return Thread.getAllStackTraces().keySet().stream()
-                .filter(Thread::isAlive)
-                .map(Thread::getName)
-                .filter(name -> name.startsWith("ct-block-") || name.startsWith("ct-fj-"))
+        List<Thread> engineThreads = Thread.getAllStackTraces().keySet().stream()
+                .filter(thread -> thread.getName().startsWith("ct-block-") || thread.getName().startsWith("ct-fj-"))
                 .toList();
+        for (Thread thread : engineThreads) {
+            try {
+                thread.join(Duration.ofSeconds(5));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        return engineThreads.stream().filter(Thread::isAlive).map(Thread::getName).toList();
     }
 }
