@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: ct-reconstruction
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+server:
+  shutdown: graceful
+
+logging:
+  pattern:
+    level: "%5p [reconstruction=%X{reconstructionId:--}]"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+ct:
+  data-directory: ./data
+  jobs:
+    workers: 1
+    queue-capacity: 8
+    shutdown-timeout: 20s
+  storage:
+    max-images: 16
+    cached-systems: 2

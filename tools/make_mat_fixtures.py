@@ -7,7 +7,14 @@ Two kinds of files are produced:
     never produces but MATLAB does: a double array stored in a narrower integer
     type, small data elements, and big-endian byte order.
 
-Usage: python3 tools/make_mat_fixtures.py ct-matlab/src/test/resources/fixtures
+It also writes a tiny data folder for the ct-service tests, laid out like the
+FIPS downloads: a dataset with a sparse system matrix A and a sinogram m whose
+column-major order matches the rows of A, a GroundTruthReconstruction.mat next
+to it, a MAT-file that is not a dataset and a broken file.
+
+Usage:
+  python3 tools/make_mat_fixtures.py ct-matlab/src/test/resources/fixtures
+  python3 tools/make_mat_fixtures.py --service ct-service/src/test/resources/data
 """
 import struct
 import sys
@@ -16,6 +23,7 @@ from pathlib import Path
 import numpy as np
 import scipy.io
 import scipy.sparse
+import scipy.sparse.linalg
 
 MI_INT8, MI_UINT8, MI_INT16, MI_INT32, MI_UINT32, MI_DOUBLE, MI_MATRIX = 1, 2, 3, 5, 6, 9, 14
 MX_CHAR, MX_SPARSE, MX_DOUBLE = 4, 5, 6
@@ -76,6 +84,61 @@ def handwritten(order):
     return header(order) + narrow + signed + sparse + text
 
 
+def disk_phantom(size):
+    pixel = 2.0 / size
+    image = np.zeros((size, size))
+    for row in range(size):
+        for column in range(size):
+            x = -1.0 + (column + 0.5) * pixel
+            y = 1.0 - (row + 0.5) * pixel
+            image[row, column] = (x * x + y * y <= 0.7 ** 2) + 0.5 * ((x - 0.2) ** 2 + (y - 0.2) ** 2 <= 0.25 ** 2)
+    return image
+
+
+def parallel_beam_system(size, angles):
+    pixel = 2.0 / size
+    detectors = 2 * int(np.ceil(size * np.sqrt(2.0) / 2.0)) + 1
+    step = pixel / 4
+    rows, columns, values = [], [], []
+    for angle in range(angles):
+        theta = np.pi * angle / angles
+        for detector in range(detectors):
+            offset = (detector - (detectors - 1) / 2.0) * pixel
+            weights = {}
+            for along in np.arange(-np.sqrt(2.0), np.sqrt(2.0), step):
+                x = offset * np.cos(theta) - along * np.sin(theta)
+                y = offset * np.sin(theta) + along * np.cos(theta)
+                column = int(np.floor((x + 1.0) / pixel))
+                row = int(np.floor((1.0 - y) / pixel))
+                if 0 <= column < size and 0 <= row < size:
+                    index = row + column * size
+                    weights[index] = weights.get(index, 0.0) + step
+            for index, weight in weights.items():
+                rows.append(detector + angle * detectors)
+                columns.append(index)
+                values.append(weight)
+    matrix = scipy.sparse.csc_matrix((values, (rows, columns)), shape=(detectors * angles, size * size))
+    return matrix, detectors
+
+
+def service_data(target):
+    target = Path(target)
+    (target / "tiny").mkdir(parents=True, exist_ok=True)
+    (target / "other").mkdir(parents=True, exist_ok=True)
+    (target / "broken").mkdir(parents=True, exist_ok=True)
+    size, angles = 8, 12
+    matrix, detectors = parallel_beam_system(size, angles)
+    phantom = disk_phantom(size)
+    measurements = (matrix @ phantom.flatten(order="F")).reshape((detectors, angles), order="F")
+    scipy.io.savemat(target / "tiny" / "Data8.mat",
+                     {"A": matrix, "m": measurements, "normA": np.array([[scipy.sparse.linalg.norm(matrix)]])},
+                     do_compression=True, format="5")
+    scipy.io.savemat(target / "tiny" / "GroundTruthReconstruction.mat",
+                     {"FBP16": disk_phantom(16)}, do_compression=True, format="5")
+    scipy.io.savemat(target / "other" / "notes.mat", {"x": np.ones((3, 3))}, do_compression=True, format="5")
+    (target / "broken" / "Data.mat").write_bytes(b"not a MAT-file at all" * 10)
+
+
 def main(target):
     target = Path(target)
     target.mkdir(parents=True, exist_ok=True)
@@ -87,4 +150,7 @@ def main(target):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    if sys.argv[1] == "--service":
+        service_data(sys.argv[2])
+    else:
+        main(sys.argv[1])
