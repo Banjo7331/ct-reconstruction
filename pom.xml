@@ -13,6 +13,7 @@
     <description>Parallel iterative reconstruction of real X-ray tomography measurements, exposed through a REST API.</description>
 
     <modules>
+        <module>ct-matlab</module>
     </modules>
 
     <properties>
