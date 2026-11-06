@@ -1,0 +1,14 @@
+spring:
+  application:
+    name: ct-reconstruction
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+server:
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

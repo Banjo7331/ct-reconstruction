@@ -16,6 +16,7 @@
         <module>ct-matlab</module>
         <module>ct-engine</module>
         <module>ct-core</module>
+        <module>ct-service</module>
     </modules>
 
     <properties>
