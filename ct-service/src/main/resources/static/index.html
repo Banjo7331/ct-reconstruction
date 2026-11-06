@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CT Reconstruction</title>
+  <style>
+    :root {
+      --bg: #0f1216;
+      --panel: #171b21;
+      --line: #2a3039;
+      --text: #e6e9ee;
+      --muted: #8b95a3;
+      --accent: #4fa3ff;
+      --misfit: #f5a524;
+      --ok: #3ccf8e;
+      --bad: #ff6b6b;
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 48px; }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    p.lead { color: var(--muted); margin: 0 0 20px; }
+    a { color: var(--accent); }
+    .grid { display: grid; grid-template-columns: 330px 1fr; gap: 16px; }
+    @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+    section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+    h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 12px; }
+    label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+    input, select, button { width: 100%; font: inherit; color: var(--text); background: #0c0f13; border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; }
+    button { cursor: pointer; background: var(--accent); border-color: var(--accent); color: #04121f; font-weight: 600; margin-top: 16px; }
+    button.secondary { background: transparent; color: var(--text); border-color: var(--line); font-weight: 400; margin-top: 10px; }
+    button:disabled { opacity: .5; cursor: default; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .meta { font-size: 13px; color: var(--muted); margin-top: 6px; }
+    .bar { height: 8px; background: #0c0f13; border-radius: 4px; overflow: hidden; margin: 8px 0; }
+    .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+    .status { font-variant-numeric: tabular-nums; }
+    .status b.COMPLETED { color: var(--ok); }
+    .status b.FAILED, .status b.CANCELLED { color: var(--bad); }
+    .message { color: var(--bad); min-height: 1.5em; margin-top: 8px; }
+    .images { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    figure { margin: 0; }
+    figure img { width: 100%; aspect-ratio: 1; object-fit: contain; image-rendering: pixelated; background: #000; border-radius: 6px; display: block; }
+    figure img.wide { aspect-ratio: auto; }
+    figcaption { font-size: 13px; color: var(--muted); margin-top: 6px; }
+    .placeholder { aspect-ratio: 1; border: 1px dashed var(--line); border-radius: 6px; display: grid; place-items: center; color: var(--muted); font-size: 13px; text-align: center; padding: 12px; }
+    svg { width: 100%; height: 190px; display: block; }
+    .legend { display: flex; gap: 16px; font-size: 13px; color: var(--muted); }
+    .legend span::before { content: ""; display: inline-block; width: 12px; height: 3px; margin-right: 6px; vertical-align: middle; background: currentColor; }
+    .legend .residual { color: var(--accent); }
+    .legend .misfit { color: var(--misfit); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+    th { color: var(--muted); font-weight: 500; }
+    tr[data-id] { cursor: pointer; }
+    tr[data-id]:hover { background: #1d232b; }
+    .scroll { overflow-x: auto; }
+    .empty { color: var(--muted); font-size: 14px; }
+    .empty code { color: var(--text); }
+    .stack { display: grid; gap: 16px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>CT Reconstruction</h1>
+  <p class="lead">Real X-ray measurements from the FIPS open datasets, reconstructed by parallel Tikhonov-regularised conjugate gradients.</p>
+
+  <div class="grid">
+    <section>
+      <h2>Dataset</h2>
+      <div id="no-data" class="empty" hidden>
+        No datasets found. Download <code>Data82.mat</code> or <code>Data164.mat</code> from the
+        <a href="https://zenodo.org/records/1254206" target="_blank" rel="noopener">FIPS walnut record on Zenodo</a>
+        into <code>data/walnut/</code> next to the application and reload this page.
+      </div>
+      <form id="form">
+        <label for="dataset">Measurement file</label>
+        <select id="dataset"></select>
+        <div class="meta" id="dataset-meta"></div>
+        <div class="row">
+          <div>
+            <label for="iterations">Iterations</label>
+            <input id="iterations" type="number" min="1" max="1000" value="20">
+          </div>
+          <div>
+            <label for="regularization">Regularisation α</label>
+            <input id="regularization" type="number" min="0" step="any" value="10">
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="mode">Execution</label>
+            <select id="mode">
+              <option value="FORK_JOIN">Fork/join</option>
+              <option value="STATIC_BLOCKS">Static blocks</option>
+              <option value="SEQUENTIAL">Sequential</option>
+            </select>
+          </div>
+          <div>
+            <label for="threads">Threads</label>
+            <input id="threads" type="number" min="1" max="64">
+          </div>
+        </div>
+        <button id="submit" type="submit">Reconstruct</button>
+      </form>
+      <div id="progress" hidden>
+        <h2 style="margin-top:20px">Progress</h2>
+        <div class="status" id="status-line"></div>
+        <div class="bar"><div id="bar"></div></div>
+        <button id="cancel" class="secondary" type="button">Cancel</button>
+      </div>
+      <div class="message" id="message"></div>
+    </section>
+
+    <div class="stack">
+      <section>
+        <h2>Images</h2>
+        <div class="images">
+          <figure>
+            <div class="placeholder" id="result-placeholder">The reconstruction appears here when it completes.</div>
+            <img id="result" alt="Reconstruction" hidden>
+            <figcaption id="result-caption">Reconstruction</figcaption>
+          </figure>
+          <figure id="reference-figure" hidden>
+            <img id="reference" alt="Reference reconstruction">
+            <figcaption>Reference: high-resolution FBP from the dataset authors</figcaption>
+          </figure>
+          <figure>
+            <img id="sinogram" class="wide" alt="Measured sinogram">
+            <figcaption>Measured sinogram: detectors down, projection angles across</figcaption>
+          </figure>
+        </div>
+      </section>
+      <section>
+        <h2>Convergence</h2>
+        <svg id="chart" viewBox="0 0 600 190" preserveAspectRatio="none" role="img" aria-label="Convergence chart"></svg>
+        <div class="legend"><span class="residual">relative residual</span><span class="misfit">relative data misfit</span></div>
+      </section>
+    </div>
+  </div>
+
+  <section style="margin-top:16px">
+    <h2>Recent reconstructions</h2>
+    <div class="scroll">
+      <table>
+        <thead>
+        <tr><th>Submitted</th><th>Dataset</th><th>Status</th><th>Iterations</th><th>α</th><th>Mode</th><th>Threads</th><th>Time</th><th>Misfit</th></tr>
+        </thead>
+        <tbody id="history"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const state = { datasets: [], current: null, pollTimer: null };
+  const TERMINAL = ['COMPLETED', 'FAILED', 'CANCELLED'];
+
+  $('threads').value = Math.min(navigator.hardwareConcurrency || 4, 64);
+
+  async function api(path, options = {}) {
+    const response = await fetch(path, options);
+    const body = response.headers.get('content-type')?.includes('json') ? await response.json() : null;
+    if (!response.ok) {
+      const retry = response.headers.get('Retry-After');
+      const detail = body?.detail || response.statusText;
+      throw new Error(retry ? `${detail} (retry in ${retry}s)` : detail);
+    }
+    return { body, location: response.headers.get('Location') };
+  }
+
+  function megabytes(bytes) {
+    return `${(bytes / 1e6).toFixed(1)} MB`;
+  }
+
+  async function loadDatasets() {
+    const { body } = await api('/api/datasets');
+    state.datasets = body;
+    $('no-data').hidden = body.length > 0;
+    $('form').hidden = body.length === 0;
+    $('dataset').replaceChildren(...body.map(dataset => {
+      const option = document.createElement('option');
+      option.value = dataset.id;
+      option.textContent = dataset.id;
+      return option;
+    }));
+    if (body.length > 0) selectDataset();
+  }
+
+  function selectedDataset() {
+    return state.datasets.find(dataset => dataset.id === $('dataset').value);
+  }
+
+  function selectDataset() {
+    const dataset = selectedDataset();
+    if (!dataset) return;
+    $('dataset-meta').textContent =
+      `${dataset.imageSize}×${dataset.imageSize} image, ${dataset.detectorCount} detectors × ` +
+      `${dataset.angleCount} angles, ${megabytes(dataset.fileSizeBytes)}`;
+    const id = encodeURIComponent(dataset.id);
+    $('sinogram').src = `/api/datasets/sinogram?id=${id}`;
+    $('reference-figure').hidden = !dataset.hasReference;
+    if (dataset.hasReference) $('reference').src = `/api/datasets/reference?id=${id}`;
+  }
+
+  $('dataset').addEventListener('change', selectDataset);
+
+  $('form').addEventListener('submit', async event => {
+    event.preventDefault();
+    $('message').textContent = '';
+    const request = {
+      datasetId: $('dataset').value,
+      iterations: Number($('iterations').value),
+      regularization: Number($('regularization').value),
+      mode: $('mode').value,
+      threads: Number($('threads').value)
+    };
+    try {
+      const { body } = await api('/api/reconstructions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request)
+      });
+      track(body);
+    } catch (error) {
+      $('message').textContent = error.message;
+    }
+  });
+
+  $('cancel').addEventListener('click', async () => {
+    if (!state.current) return;
+    try {
+      await api(`/api/reconstructions/${state.current}/cancel`, { method: 'POST' });
+    } catch (error) {
+      $('message').textContent = error.message;
+    }
+  });
+
+  function track(reconstruction) {
+    state.current = reconstruction.id;
+    $('progress').hidden = false;
+    $('submit').disabled = true;
+    $('cancel').disabled = false;
+    show(reconstruction);
+    clearInterval(state.pollTimer);
+    state.pollTimer = setInterval(poll, 300);
+  }
+
+  async function poll() {
+    try {
+      const { body } = await api(`/api/reconstructions/${state.current}`);
+      show(body);
+      if (TERMINAL.includes(body.status)) {
+        clearInterval(state.pollTimer);
+        $('submit').disabled = false;
+        $('cancel').disabled = true;
+        if (body.failureReason) $('message').textContent = body.failureReason;
+        refreshHistory();
+      }
+    } catch (error) {
+      clearInterval(state.pollTimer);
+      $('submit').disabled = false;
+      $('message').textContent = error.message;
+    }
+  }
+
+  function show(reconstruction) {
+    const line = $('status-line');
+    line.replaceChildren();
+    const status = document.createElement('b');
+    status.className = reconstruction.status;
+    status.textContent = reconstruction.status;
+    const progress = reconstruction.progress;
+    line.append(status, ` iteration ${progress.completedIterations}/${progress.totalIterations}`);
+    if (reconstruction.durationMillis != null) line.append(` in ${(reconstruction.durationMillis / 1000).toFixed(2)} s`);
+    if (reconstruction.termination === 'CONVERGED') line.append(' (converged)');
+    if (reconstruction.cancellationRequested && reconstruction.status === 'RUNNING') line.append(' (cancelling)');
+    $('bar').style.width = `${progress.percent}%`;
+    drawChart(reconstruction.convergence);
+    if (reconstruction.status === 'COMPLETED') {
+      $('result').src = `/api/reconstructions/${reconstruction.id}/image`;
+      $('result').hidden = false;
+      $('result-placeholder').hidden = true;
+      const p = reconstruction.parameters;
+      $('result-caption').textContent = `Reconstruction: ${p.iterations} iterations, α = ${p.regularization}`;
+    }
+  }
+
+  function drawChart(points) {
+    const svg = $('chart');
+    svg.replaceChildren();
+    if (!points || points.length === 0) return;
+    const width = 600, height = 190, padding = 8;
+    const values = points.flatMap(p => [p.relativeResidual, p.relativeMisfit]).filter(v => v > 0);
+    const low = Math.log10(Math.min(...values));
+    const high = Math.log10(Math.max(...values));
+    const span = Math.max(high - low, 1e-9);
+    const maxIteration = Math.max(points[points.length - 1].iteration, 2);
+    const x = iteration => padding + (iteration - 1) / (maxIteration - 1) * (width - 2 * padding);
+    const y = value => padding + (high - Math.log10(Math.max(value, 1e-300))) / span * (height - 2 * padding);
+    for (const [key, color] of [['relativeResidual', 'var(--accent)'], ['relativeMisfit', 'var(--misfit)']]) {
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+      line.setAttribute('points', points.map(p => `${x(p.iteration)},${y(p[key])}`).join(' '));
+      line.setAttribute('fill', 'none');
+      line.setAttribute('stroke', color);
+      line.setAttribute('stroke-width', '2');
+      line.setAttribute('vector-effect', 'non-scaling-stroke');
+      svg.append(line);
+    }
+  }
+
+  async function refreshHistory() {
+    try {
+      const { body } = await api('/api/reconstructions');
+      $('history').replaceChildren(...body.map(reconstruction => {
+        const row = document.createElement('tr');
+        const p = reconstruction.parameters;
+        const last = reconstruction.convergence[reconstruction.convergence.length - 1];
+        [
+          new Date(reconstruction.submittedAt).toLocaleTimeString(),
+          p.datasetId,
+          reconstruction.status,
+          `${reconstruction.progress.completedIterations}/${p.iterations}`,
+          p.regularization,
+          p.mode,
+          p.threads,
+          reconstruction.durationMillis != null ? `${(reconstruction.durationMillis / 1000).toFixed(2)} s` : '',
+          last ? last.relativeMisfit.toExponential(2) : ''
+        ].forEach(value => {
+          const cell = document.createElement('td');
+          cell.textContent = value;
+          row.append(cell);
+        });
+        if (reconstruction.status === 'COMPLETED') {
+          row.dataset.id = reconstruction.id;
+          row.addEventListener('click', () => {
+            state.current = reconstruction.id;
+            $('progress').hidden = false;
+            show(reconstruction);
+          });
+        }
+        return row;
+      }));
+    } catch (error) {
+      $('message').textContent = error.message;
+    }
+  }
+
+  loadDatasets().catch(error => { $('message').textContent = error.message; });
+  refreshHistory();
+</script>
+</body>
+</html>
