@@ -74,13 +74,23 @@ shown as a reference. Files saved in MATLAB's HDF5-based format (`-v7.3`) are no
 
 Requirements: JDK 21 and Maven 3.9.
 
+Run both commands from the project root, the folder that contains `data/`:
+
 ```bash
 mvn verify                                   # build and run all tests
-mvn -pl ct-service -am spring-boot:run       # start on http://localhost:8080
+java -jar ct-service/target/ct-service.jar   # start on http://localhost:8080
 ```
 
-The data folder defaults to `./data` relative to the working directory. Point it elsewhere with
-`--ct.data-directory=/path/to/data` or the `CT_DATA_DIRECTORY` environment variable.
+The data folder defaults to `./data` relative to the working directory. In IntelliJ, set the
+working directory of the run configuration to the project root (`$PROJECT_DIR$`). Point it
+elsewhere with `--ct.data-directory=/path/to/data` or the `CT_DATA_DIRECTORY` environment variable.
+
+The performance test is excluded from the normal build. Run it on a machine with at least four
+cores with:
+
+```bash
+mvn -Pperformance -pl ct-engine -am verify
+```
 
 With Docker, the `data` folder is mounted read-only:
 
